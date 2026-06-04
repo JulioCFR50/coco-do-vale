@@ -850,9 +850,12 @@ function selectRole(el,role){
 
 // ── AUTH ───────────────────────────────────────────────────────
 function doLogin(){
-  const e=document.getElementById('login-email').value.trim();
+  const e=document.getElementById('login-email').value.trim().toLowerCase();
   const p=document.getElementById('login-pass').value;
   if(!e||!p){showAlert('login-alert','Preencha todos os campos.','error');return}
+  // Sempre lê do localStorage para garantir dados atualizados
+  const freshUsers = JSON.parse(localStorage.getItem('cdv_users')||'[]');
+  users = freshUsers; // sincroniza variável em memória
   const u=users.find(x=>x.email===e&&x.pass===p);
   if(!u){showAlert('login-alert','E-mail ou senha incorretos.','error');return}
   currentUser=u;
@@ -873,9 +876,13 @@ function doRegister(){
   if(!/[A-Z]/.test(pass)){showAlert('reg-alert','A senha precisa ter pelo menos uma letra maiúscula.','error');return}
   if(!/[0-9]/.test(pass)){showAlert('reg-alert','A senha precisa ter pelo menos um número.','error');return}
   if(pass!==confirm){showAlert('reg-alert','As senhas não coincidem.','error');return}
-  if(users.find(u=>u.email===email)){showAlert('reg-alert','Este e-mail já está cadastrado.','error');return}
+  // Re-read from localStorage to check for existing emails
+  const currentUsers = JSON.parse(localStorage.getItem('cdv_users')||'[]');
+  if(currentUsers.find(u=>u.email===email)){showAlert('reg-alert','Este e-mail já está cadastrado.','error');return}
   const initials=(first[0]+(last[0]||'')).toUpperCase();
   const newUser={email,pass,name:first+' '+last,role:selectedRole,dept,initials};
+  // Re-read latest users from localStorage before saving
+  users = JSON.parse(localStorage.getItem('cdv_users')||'[]');
   users.push(newUser);
   const cls=['c1','c2','c3','c4','c5'][team.length%5];
   team.push({initials,cls,name:first+' '+last,email,role:selectedRole,dept,status:'Ativo'});
@@ -1108,15 +1115,33 @@ function doResetPassword(){
   if(!/[A-Z]/.test(pass)){showAlert('forgot-alert','Precisa de pelo menos uma maiúscula.','error');return}
   if(!/[0-9]/.test(pass)){showAlert('forgot-alert','Precisa de pelo menos um número.','error');return}
   if(pass!==conf){showAlert('forgot-alert','As senhas não coincidem.','error');return}
-  const stored=localStorage.getItem('cdv_users');
-  const usrs=stored?JSON.parse(stored):[];
-  const idx=usrs.findIndex(u=>u.email===email);
-  if(idx===-1){showAlert('forgot-alert','E-mail não encontrado. Verifique ou cadastre-se.','error');return}
-  usrs[idx].pass=pass;
-  localStorage.setItem('cdv_users',JSON.stringify(usrs));
+
+  // Carrega usuários do localStorage
+  let usrs = JSON.parse(localStorage.getItem('cdv_users')||'[]');
+
+  // Se não encontrar, inicializa com array vazio e salva
+  if(!localStorage.getItem('cdv_users')){
+    localStorage.setItem('cdv_users','[]');
+  }
+
+  const idx = usrs.findIndex(u => u.email === email);
+  if(idx === -1){
+    const count = usrs.length;
+    showAlert('forgot-alert',
+      count === 0
+        ? 'Nenhum usuário cadastrado ainda. Crie uma conta primeiro.'
+        : 'E-mail não encontrado. Verifique se digitou corretamente.',
+      'error');
+    return;
+  }
+  usrs[idx].pass = pass;
+  localStorage.setItem('cdv_users', JSON.stringify(usrs));
   closeForgotModal();
-  notify('Senha redefinida com sucesso! Faça login.');
-  document.getElementById('login-email').value=email;
+  document.getElementById('forgot-email').value='';
+  document.getElementById('forgot-newpass').value='';
+  document.getElementById('forgot-confirm').value='';
+  document.getElementById('login-email').value = email;
+  notify('✅ Senha redefinida! Faça login com a nova senha.');
 }
 
 
